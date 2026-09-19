@@ -28,6 +28,10 @@ def get_com_member():
     # Save original state
     orig_modules = set(sys.modules.keys())
     orig_path = list(sys.path)
+    # Save the ACTUAL sw_preflight object (if any) so we can restore it,
+    # not just its key name. Restoring by key-set alone would leave the
+    # real module missing whenever it was already imported.
+    orig_sw_preflight = sys.modules.get("sw_preflight")
 
     # Stub sw_preflight so import_com_dependencies() returns harmless placeholders
     # and ensure_solidworks_installed() is a no-op.
@@ -59,6 +63,12 @@ def get_com_member():
         for name in list(sys.modules.keys()):
             if name not in orig_modules:
                 del sys.modules[name]
+        # Restore the original sw_preflight object exactly, or drop the stub
+        # if sw_preflight never existed before this fixture ran.
+        if orig_sw_preflight is not None:
+            sys.modules["sw_preflight"] = orig_sw_preflight
+        elif "sw_preflight" in sys.modules:
+            del sys.modules["sw_preflight"]
 
 
 class _Obj:
@@ -107,3 +117,20 @@ def test_callable_error_propagates(get_com_member):
     """
     with pytest.raises(RuntimeError, match="COM error"):
         get_com_member(_Obj(), "RaiseError")
+
+
+class _RuntimeAttrRaiser:
+    """A present, callable member that raises AttributeError when invoked."""
+
+    def RaiseAttrError(self):
+        raise AttributeError("member not found at runtime")
+
+
+def test_attribute_error_during_invocation_with_default_propagates(get_com_member):
+    """
+    `default` must only cover the getattr LOOKUP miss.
+    An AttributeError raised while CALLING a present member must propagate,
+    even when a default is supplied.
+    """
+    with pytest.raises(AttributeError, match="member not found at runtime"):
+        get_com_member(_RuntimeAttrRaiser(), "RaiseAttrError", default=None)
