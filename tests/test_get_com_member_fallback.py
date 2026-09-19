@@ -23,16 +23,15 @@ def get_com_member():
     """
     Import get_com_member without needing Windows/pywin32.
     Temporarily stubs sw_preflight so sw_connect imports cleanly on Linux/Docker,
-    then restores the original sys.modules and sys.path after the module.
+    then restores the original state after the module.
+    
+    Surgical isolation: tracks EXACTLY what it modifies and restores only that.
     """
-    # Save original state
-    orig_modules = set(sys.modules.keys())
-    orig_path = list(sys.path)
-    # Save the ACTUAL sw_preflight object (if any) so we can restore it,
-    # not just its key name. Restoring by key-set alone would leave the
-    # real module missing whenever it was already imported.
+    # Track EXACTLY what we modify - no broad sweeps
+    sw_preflight_existed_before = "sw_preflight" in sys.modules
     orig_sw_preflight = sys.modules.get("sw_preflight")
-
+    path_inserted = SCRIPTS_DIR not in sys.path
+    
     # Stub sw_preflight so import_com_dependencies() returns harmless placeholders
     # and ensure_solidworks_installed() is a no-op.
     stub = types.ModuleType("sw_preflight")
@@ -47,7 +46,7 @@ def get_com_member():
     stub.ensure_solidworks_installed = _ensure_solidworks_installed
     sys.modules["sw_preflight"] = stub
 
-    if SCRIPTS_DIR not in sys.path:
+    if path_inserted:
         sys.path.insert(0, SCRIPTS_DIR)
 
     try:
@@ -58,16 +57,18 @@ def get_com_member():
         spec.loader.exec_module(module)
         yield module.get_com_member
     finally:
-        # Restore sys.modules and sys.path to avoid interfering with other tests
-        sys.path[:] = orig_path
-        for name in list(sys.modules.keys()):
-            if name not in orig_modules:
-                del sys.modules[name]
-        # Restore the original sw_preflight object exactly, or drop the stub
-        # if sw_preflight never existed before this fixture ran.
-        if orig_sw_preflight is not None:
+        # Surgical teardown: remove ONLY the module we created
+        if "sw_connect_under_test" in sys.modules:
+            del sys.modules["sw_connect_under_test"]
+        
+        # Restore sys.path only if we inserted it
+        if path_inserted and SCRIPTS_DIR in sys.path:
+            sys.path.remove(SCRIPTS_DIR)
+        
+        # Restore sw_preflight precisely
+        if sw_preflight_existed_before and orig_sw_preflight is not None:
             sys.modules["sw_preflight"] = orig_sw_preflight
-        elif "sw_preflight" in sys.modules:
+        elif not sw_preflight_existed_before and "sw_preflight" in sys.modules:
             del sys.modules["sw_preflight"]
 
 
@@ -134,3 +135,41 @@ def test_attribute_error_during_invocation_with_default_propagates(get_com_membe
     """
     with pytest.raises(AttributeError, match="member not found at runtime"):
         get_com_member(_RuntimeAttrRaiser(), "RaiseAttrError", default=None)
+
+
+def test_callable_returns_none_is_not_treated_as_default_missing(get_com_member):
+    """
+    A callable that returns None must return None, NOT the default value.
+    The default is only used when the attribute is missing entirely.
+    """
+    class _ReturnsNone:
+        def GetValue(self):
+            return None
+
+    result = get_com_member(_ReturnsNone(), "GetValue", default="fallback")
+    assert result is None
+
+
+def test_missing_member_with_falsy_default_returns_falsy(get_com_member):
+    """
+    Falsy defaults (0, "", False, []) must be returned as-is when member is missing.
+    The default logic must not treat falsy values as "no default provided".
+    """
+    obj = _Obj()
+    assert get_com_member(obj, "NonExistent", default=0) == 0
+    assert get_com_member(obj, "NonExistent", default="") == ""
+    assert get_com_member(obj, "NonExistent", default=False) is False
+    assert get_com_member(obj, "NonExistent", default=[]) == []
+
+
+def test_present_member_with_falsy_default_ignores_default(get_com_member):
+    """
+    When the member exists, the default must be ignored entirely.
+    Falsy defaults must not affect the return value of present members.
+    """
+    obj = _Obj()
+    # Present attribute with falsy default
+    assert get_com_member(obj, "color", default="blue") == "red"
+    # Present callable with falsy default
+    assert get_com_member(obj, "GetTitle", default=None) == "part1"
+    assert get_com_member(obj, "Add", 2, 3, default=999) == 5
