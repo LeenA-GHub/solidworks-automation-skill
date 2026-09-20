@@ -29,6 +29,9 @@ def get_com_member():
     sw_preflight_existed_before = "sw_preflight" in sys.modules
     orig_sw_preflight = sys.modules.get("sw_preflight")
     path_inserted = SCRIPTS_DIR not in sys.path
+    # Track whether sw_connect_under_test existed BEFORE we create it
+    sw_connect_under_test_existed_before = "sw_connect_under_test" in sys.modules
+    orig_sw_connect_under_test = sys.modules.get("sw_connect_under_test")
 
     # Stub sw_preflight so import_com_dependencies() returns harmless placeholders
     # and ensure_solidworks_installed() is a no-op.
@@ -55,8 +58,10 @@ def get_com_member():
         spec.loader.exec_module(module)
         yield module.get_com_member
     finally:
-        # Surgical teardown: remove ONLY the module we created
-        if "sw_connect_under_test" in sys.modules:
+        # Surgical teardown: restore sw_connect_under_test precisely
+        if sw_connect_under_test_existed_before and orig_sw_connect_under_test is not None:
+            sys.modules["sw_connect_under_test"] = orig_sw_connect_under_test
+        elif not sw_connect_under_test_existed_before and "sw_connect_under_test" in sys.modules:
             del sys.modules["sw_connect_under_test"]
 
         # Restore sys.path only if we inserted it
