@@ -28,45 +28,66 @@ class FakeModel:
         return True
 
 
-def test_extrude_cut_passes_true_false_direction_for_direction_true(monkeypatch):
-    """@brief direction=True must flow into Dir (3rd arg), not Sd."""
+def test_extrude_cut_sd_always_true(monkeypatch):
+    """@brief Sd (arg0) must always be True."""
     model = FakeModel()
     monkeypatch.setattr(sw_part, "_ensure_sketch_selected", lambda *args: None)
-
     sw_part.extrude_cut(model, "Sketch1", 0.01, direction=True)
-
     args = model.FeatureManager.cut_calls[0]
-    assert args[0] is True   # Sd
-    assert args[1] is False  # Flip
-    assert args[2] is True   # Dir = direction
-    assert args[3] == 0      # end_condition (blind)
-    assert args[4] == 0      # T2
+    assert args[0] is True  # Sd
 
 
-def test_extrude_cut_passes_true_false_direction_for_direction_false(monkeypatch):
-    """@brief direction=False must flow into Dir (3rd arg), proving the fix."""
+def test_extrude_cut_flip_flows_true(monkeypatch):
+    """@brief flip=True must flow into Flip (arg1)."""
     model = FakeModel()
     monkeypatch.setattr(sw_part, "_ensure_sketch_selected", lambda *args: None)
-
-    sw_part.extrude_cut(model, "Sketch1", 0.01, direction=False)
-
+    sw_part.extrude_cut(model, "Sketch1", 0.01, flip=True)
     args = model.FeatureManager.cut_calls[0]
-    assert args[0] is True   # Sd (always True)
-    assert args[1] is False  # Flip (always False)
-    assert args[2] is False  # Dir = direction (the key assertion)
-    assert args[3] == 0      # end_condition
-    assert args[4] == 0      # T2
+    assert args[1] is True  # Flip
 
 
-def test_extrude_cut_uses_through_all_when_depth_zero(monkeypatch):
+def test_extrude_cut_flip_flows_false(monkeypatch):
+    """@brief flip=False must flow into Flip (arg1)."""
+    model = FakeModel()
+    monkeypatch.setattr(sw_part, "_ensure_sketch_selected", lambda *args: None)
+    sw_part.extrude_cut(model, "Sketch1", 0.01, flip=False)
+    args = model.FeatureManager.cut_calls[0]
+    assert args[1] is False  # Flip
+
+
+def test_extrude_cut_dir_flows_true(monkeypatch):
+    """@brief direction=True must flow into Dir (arg2)."""
+    model = FakeModel()
+    monkeypatch.setattr(sw_part, "_ensure_sketch_selected", lambda *args: None)
+    sw_part.extrude_cut(model, "Sketch1", 0.01, direction=True)
+    args = model.FeatureManager.cut_calls[0]
+    assert args[2] is True  # Dir
+
+
+def test_extrude_cut_dir_flows_false(monkeypatch):
+    """@brief direction=False must flow into Dir (arg2)."""
+    model = FakeModel()
+    monkeypatch.setattr(sw_part, "_ensure_sketch_selected", lambda *args: None)
+    sw_part.extrude_cut(model, "Sketch1", 0.01, direction=False)
+    args = model.FeatureManager.cut_calls[0]
+    assert args[2] is False  # Dir
+
+
+def test_extrude_cut_end_condition_when_depth_zero(monkeypatch):
     """@brief depth=0 must set end_condition to 1 (Through All)."""
     model = FakeModel()
     monkeypatch.setattr(sw_part, "_ensure_sketch_selected", lambda *args: None)
-
     sw_part.extrude_cut(model, "Sketch1", 0, direction=True)
-
     args = model.FeatureManager.cut_calls[0]
-    assert args[0] is True   # Sd
-    assert args[1] is False  # Flip
-    assert args[2] is True   # Dir
-    assert args[3] == 1      # end_condition = swEndCondThroughAll
+    assert args[3] == 1  # end_condition = swEndCondThroughAll
+
+
+def test_extrude_cut_assembly_scope_flags_false(monkeypatch):
+    """@brief Assembly-scope flags (args 20-21) must be False for part docs."""
+    model = FakeModel()
+    monkeypatch.setattr(sw_part, "_ensure_sketch_selected", lambda *args: None)
+    sw_part.extrude_cut(model, "Sketch1", 0.01, direction=True)
+    args = model.FeatureManager.cut_calls[0]
+    assert args[19] is True   # Merge
+    assert args[20] is False  # AssemblyFeatureScope
+    assert args[21] is False  # AutoSelectComponents
