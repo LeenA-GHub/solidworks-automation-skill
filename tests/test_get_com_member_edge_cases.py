@@ -7,16 +7,7 @@ Run:  pytest -q tests/test_get_com_member_edge_cases.py
 import pytest
 
 
-class _Obj:
-    """A fake COM object with a mix of attributes and callables."""
-
-    color = "red"                       # plain attribute
-
-    def GetTitle(self):                 # callable, no args
-        return "part1"
-
-    def Add(self, a, b):                # callable, with args
-        return a + b
+# _Obj is now provided by the fake_com_obj fixture in conftest.py
 
 
 class _RuntimeAttrRaiser:
@@ -49,24 +40,24 @@ def test_callable_returns_none_is_not_treated_as_default_missing(get_com_member)
     assert result is None
 
 
-def test_missing_member_with_falsy_default_returns_falsy(get_com_member):
+def test_missing_member_with_falsy_default_returns_falsy(get_com_member, fake_com_obj):
     """
     Falsy defaults (0, "", False, []) must be returned as-is when member is missing.
     The default logic must not treat falsy values as "no default provided".
     """
-    obj = _Obj()
+    obj = fake_com_obj()
     assert get_com_member(obj, "NonExistent", default=0) == 0
     assert get_com_member(obj, "NonExistent", default="") == ""
     assert get_com_member(obj, "NonExistent", default=False) is False
     assert get_com_member(obj, "NonExistent", default=[]) == []
 
 
-def test_present_member_with_falsy_default_ignores_default(get_com_member):
+def test_present_member_with_falsy_default_ignores_default(get_com_member, fake_com_obj):
     """
     When the member exists, the default must be ignored entirely.
     Falsy defaults must not affect the return value of present members.
     """
-    obj = _Obj()
+    obj = fake_com_obj()
     # Present attribute with falsy default
     assert get_com_member(obj, "color", default="blue") == "red"
     # Present callable with falsy default

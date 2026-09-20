@@ -199,10 +199,14 @@ def _prog_id_for_version(version):
 
 def _read_active_document(sw):
     """读取活动文档，兼容 COM 属性/方法差异。"""
-    # Use default=None for optional member access (ActiveDoc may be None or
-    # unavailable in some SW versions/contexts). Demonstrates the fallback
-    # mechanism added in issue #16 for version-dependent COM members.
-    return get_com_member(sw, "ActiveDoc", default=None)
+    # Preserve original contract: return None on ANY failure, not just lookup miss.
+    # The default=None demonstrates the fallback added in issue #16 for
+    # version-dependent COM members, while the try/except ensures backward
+    # compatibility with the original behavior that swallowed all exceptions.
+    try:
+        return get_com_member(sw, "ActiveDoc", default=None)
+    except Exception:
+        return None
 
 
 def _wait_until_ready(sw, timeout_seconds):
