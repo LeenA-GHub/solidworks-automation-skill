@@ -653,7 +653,9 @@ def extrude_cut(model, sketch_name, depth, direction=True, flip=False):
         end_condition = 0  # swEndCondBlind
 
     return model.FeatureManager.FeatureCut4(
-        direction, flip, False,
+        True,         # Sd: 单向切除
+        False,        # Flip
+        direction,    # Dir: 切除方向
         end_condition, 0,
         depth, 0,
         False, False, False, False,
