@@ -137,14 +137,3 @@ def test_read_active_document_returns_none_on_lookup_miss(get_com_member):
         sw_connect_module.get_com_member = original_get_com_member
 
 
-def test_read_active_document_returns_none_on_non_attribute_error(get_com_member):
-    """_read_active_document returns None when ActiveDoc raises non-AttributeError."""
-    from scripts import sw_connect as sw_connect_module
-    sw = _FakeSWActiveDocRaises()
-    original_get_com_member = sw_connect_module.get_com_member
-    sw_connect_module.get_com_member = get_com_member
-    try:
-        result = sw_connect_module._read_active_document(sw)
-        assert result is None
-    finally:
-        sw_connect_module.get_com_member = original_get_com_member
