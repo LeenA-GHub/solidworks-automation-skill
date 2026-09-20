@@ -29,12 +29,26 @@ class FakeModel:
 
 
 def test_extrude_cut_sd_always_true(monkeypatch):
-    """@brief Sd (arg0) must always be True."""
+    """@brief Sd (arg0) must always be True regardless of direction."""
     model = FakeModel()
     monkeypatch.setattr(sw_part, "_ensure_sketch_selected", lambda *args: None)
     sw_part.extrude_cut(model, "Sketch1", 0.01, direction=True)
     args = model.FeatureManager.cut_calls[0]
     assert args[0] is True  # Sd
+
+
+def test_extrude_cut_sd_true_even_when_direction_false(monkeypatch):
+    """@brief Sd (arg0) must stay True even with direction=False.
+
+    OLD buggy code put `direction` into Sd, so direction=False would fail.
+    Fixed code hardcodes Sd=True, so this asserts the fix holds.
+    """
+    model = FakeModel()
+    monkeypatch.setattr(sw_part, "_ensure_sketch_selected", lambda *args: None)
+    sw_part.extrude_cut(model, "Sketch1", 0.01, direction=False)
+    args = model.FeatureManager.cut_calls[0]
+    assert args[0] is True  # Sd stays True (fix validated)
+    assert args[2] is False  # Dir receives direction=False
 
 
 def test_extrude_cut_flip_flows_true(monkeypatch):
@@ -88,6 +102,6 @@ def test_extrude_cut_assembly_scope_flags_false(monkeypatch):
     monkeypatch.setattr(sw_part, "_ensure_sketch_selected", lambda *args: None)
     sw_part.extrude_cut(model, "Sketch1", 0.01, direction=True)
     args = model.FeatureManager.cut_calls[0]
-    assert args[19] is True   # Merge
+    assert args[19] is True   # UseAutoSelect
     assert args[20] is False  # AssemblyFeatureScope
     assert args[21] is False  # AutoSelectComponents
